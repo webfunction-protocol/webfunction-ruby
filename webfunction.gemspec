@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
-require_relative "lib/web_function/version"
+require_relative "lib/webfunction/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "web_function"
+  spec.name = "webfunction"
   spec.version = WebFunction::VERSION
   spec.authors = ["Robin Clart"]
   spec.email = ["robin@clart.be"]
 
   spec.summary = "A Web Function Client for Ruby"
   spec.description = "A lightweight Web Function client for Ruby. Web Function is a radical rethinking of API design: no verbs, no nested URLs, no bloat. Just function calls over HTTP. This gem lets you invoke endpoints defined in a package, with full support for argument validations, error triples, and bearer auth."
-  spec.homepage = "https://github.com/robinclart/web_function"
+  spec.homepage = "https://github.com/webfunction-protocol/webfunction-ruby"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
 
@@ -34,7 +34,7 @@ Gem::Specification.new do |spec|
 
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/robinclart/web-functions-ruby"
-  spec.metadata["changelog_uri"] = "https://github.com/robinclart/web-functions-ruby/blob/main/CHANGELOG.md"
+  spec.metadata["source_code_uri"] = "https://github.com/webfunction-protocol/webfunction-ruby"
+  spec.metadata["changelog_uri"] = "https://github.com/webfunction-protocol/webfunction-ruby/blob/main/CHANGELOG.md"
   spec.metadata["rubygems_mfa_required"] = "true"
 end

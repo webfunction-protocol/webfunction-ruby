@@ -1,4 +1,4 @@
-# web_function
+# webfunction
 
 A [Web Function](https://webfunction.org) client for Ruby.
 
@@ -58,13 +58,13 @@ You can read the full specification at [webfunction.org](https://webfunction.org
 Add the gem to your project:
 
 ```bash
-bundle add web_function
+bundle add webfunction
 ```
 
 Or install it on its own:
 
 ```bash
-gem install web_function
+gem install webfunction
 ```
 
 The gem needs Ruby 3.1 or newer.
@@ -74,7 +74,7 @@ The gem needs Ruby 3.1 or newer.
 Point a client at a package URL and start calling endpoints:
 
 ```ruby
-require "web_function"
+require "webfunction"
 
 client = WebFunction::Client.from_package_endpoint("https://api.example.com/package")
 
@@ -576,25 +576,6 @@ WebFunction::Request.execute(
 The request adds the standard headers, posts the JSON body, and parses the
 response. It raises the same errors described in [Error handling](#error-handling).
 
-## Command line tool
-
-The gem ships with a `wfn` command. Use it to call an endpoint from the shell.
-Arguments go in a JSON string:
-
-```bash
-wfn call https://api.example.com/find-user '{"id":"123"}'
-```
-
-Pass a bearer token with `--auth` and a version with `--version`:
-
-```bash
-wfn call --auth my-token --version 2024-01-01 \
-  https://api.example.com/list-orders '{}'
-```
-
-The command prints the response as formatted JSON. On an error it prints the
-code, the message, and the details, then exits with a non-zero status.
-
 ## Development
 
 After you check out the repo, run `bin/setup` to install dependencies. Then run
@@ -602,14 +583,14 @@ After you check out the repo, run `bin/setup` to install dependencies. Then run
 experiment with the code.
 
 To install the gem on your machine, run `bundle exec rake install`. To release a
-new version, update the version in `lib/web_function/version.rb`, then run
+new version, update the version in `lib/webfunction/version.rb`, then run
 `bundle exec rake release`. This creates a git tag, pushes the commits and the
 tag, and pushes the `.gem` file to [rubygems.org](https://rubygems.org).
 
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at
-[github.com/robinclart/web_function](https://github.com/robinclart/web_function).
+[github.com/webfunction-protocol/webfunction-ruby](https://github.com/webfunction-protocol/webfunction-ruby).
 
 ## License
 
