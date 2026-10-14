@@ -3,6 +3,19 @@
 module WebFunction
   module Type
     class Any
+      # The MALFORMED_* reason (see {Type}) when this stands in for an invalid generic application, otherwise +nil+.
+      attr_reader :malformed
+
+      def initialize(param: false, malformed: nil)
+        @param = param
+        @malformed = malformed
+      end
+
+      # Whether this is the generic type parameter +T+.
+      def param?
+        @param
+      end
+
       def base_type
         "any"
       end
