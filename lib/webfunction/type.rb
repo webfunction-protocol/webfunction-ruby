@@ -44,7 +44,7 @@ module WebFunction
     # Reasons recorded in {Any#malformed} for an invalid generic application. Such a type resolves to +any+ (so a
     # package using generics, even incorrectly, still loads) and keeps the reason so validation tooling can report it.
     MALFORMED_KEY_COUNT = "key-count" # the application hash did not have exactly one key
-    MALFORMED_KEY_PREFIX = "key-prefix" # the key was not "object.<name>"
+    MALFORMED_KEY_PREFIX = "key-prefix" # the key was neither "object.<name>" nor "array"
     MALFORMED_ARGUMENT = "argument" # the value was not a valid type
 
     def self.parse(raw)
@@ -80,14 +80,23 @@ module WebFunction
       end
     end
 
-    # Parses a generic application, <tt>{ "object.<name>" => <type> }</tt>: a generic object applied to a type. Anything
-    # that is not exactly that shape resolves to +any+ carrying the reason, rather than failing.
+    # Parses a type application: a generic object applied to a type, <tt>{ "object.<name>" => <type> }</tt>, or an array of
+    # a type, <tt>{ "array" => <type> }</tt> (the same as <tt>[[<type>]]</tt>). Anything that is not exactly one of
+    # those shapes resolves to +any+ carrying the reason, rather than failing.
     def self.application(raw)
       unless raw.size == 1
         return Type.any(malformed: MALFORMED_KEY_COUNT)
       end
 
       key, value = raw.first
+
+      if key == "array"
+        if value.is_a?(Numeric) || value == true || value == false
+          return Type.any(malformed: MALFORMED_ARGUMENT)
+        end
+
+        return Type.array(Type.parse(value))
+      end
 
       unless key.is_a?(String) && key.start_with?("object.") && key != "object."
         return Type.any(malformed: MALFORMED_KEY_PREFIX)

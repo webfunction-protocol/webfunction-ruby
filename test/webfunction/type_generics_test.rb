@@ -133,4 +133,130 @@ class WebFunctionTypeGenericsTest < Minitest::Test
     assert_equal "any", package.endpoint("broken").returns.to_s
     assert_equal "array<any>", package.object("list", context: :attributes).attribute("items").type.to_s
   end
+
+  # { "array" => X } is the canonical way to write an array of X; it must read like the legacy [[X]].
+  ARRAY_APPLICATION_PAIRS = [
+    [{ "array" => "string" }, [["string"]]],
+    [{ "array" => "object.user" }, [["object.user"]]],
+    [{ "array" => ["string", "null"] }, [["string", "null"]]],
+    [{ "array" => "T" }, [["T"]]],
+    [{ "array" => { "array" => "string" } }, [[["string"]]]],
+    [{ "array" => { "object.page" => "object.user" } }, [[{ "object.page" => "object.user" }]]],
+    [{ "object.page" => { "array" => "object.user" } }, { "object.page" => [["object.user"]] }],
+    [[{ "array" => "string" }, "null"], [["string"], "null"]],
+  ].freeze
+
+  def test_array_application_reads_like_the_legacy_form
+    ARRAY_APPLICATION_PAIRS.each do |application, legacy|
+      a = Type.parse(application)
+      l = Type.parse(legacy)
+
+      assert_equal l, a, application.inspect
+      assert_equal l.to_s, a.to_s, application.inspect
+      assert_equal l.format(:base), a.format(:base), application.inspect
+      assert_equal l.format(:compact), a.format(:compact), application.inspect
+      assert_equal l.objects, a.objects, application.inspect
+    end
+  end
+
+  def test_array_application_formats
+    assert_equal "array<string>", fmt({ "array" => "string" })
+    assert_equal "array<object.user>", fmt({ "array" => "object.user" })
+    assert_equal "array<string | number>", fmt({ "array" => ["string", "number"] })
+    assert_equal "array<array<string>>", fmt({ "array" => { "array" => "string" } })
+    assert_equal "array<object.page<object.user>>", fmt({ "array" => { "object.page" => "object.user" } })
+    assert_equal "object.page<array<object.user>>", fmt({ "object.page" => { "array" => "object.user" } })
+    assert_equal "array<any>", fmt({ "array" => "T" })
+    assert_equal "array<string> | null", fmt([{ "array" => "string" }, "null"])
+    assert_equal "array<any> | array<string>", fmt(["array", { "array" => "string" }])
+  end
+
+  def test_array_application_shape
+    type = Type.parse({ "array" => "object.user" })
+
+    assert_kind_of WebFunction::Type::ArrayOf, type
+    assert_equal "array", type.base_type
+    assert_equal "object.user", type.of.to_s
+    assert_equal "array", type.format(:base)
+    assert Type.parse({ "array" => "T" }).of.param?
+  end
+
+  def test_array_application_objects
+    assert_equal ["user"], Type.parse({ "array" => "object.user" }).objects
+    assert_equal ["page", "user"], Type.parse({ "array" => { "object.page" => "object.user" } }).objects
+    assert_equal ["page", "user"], Type.parse({ "object.page" => { "array" => "object.user" } }).objects
+    assert_equal ["user"], Type.parse({ "array" => { "array" => "object.user" } }).objects
+  end
+
+  def test_array_application_validates
+    strings = Type.parse({ "array" => "string" })
+
+    assert strings.valid?(["a", "b"])
+    assert strings.valid?([])
+    refute strings.valid?([1])
+    refute strings.valid?("a")
+    refute strings.valid?(nil)
+
+    mixed = Type.parse({ "array" => ["string", "number"] })
+
+    assert mixed.valid?(["a", 1])
+    refute mixed.valid?([true])
+
+    nested = Type.parse({ "array" => { "array" => "number" } })
+
+    assert nested.valid?([[1], []])
+    refute nested.valid?([["a"]])
+  end
+
+  def test_malformed_array_applications_stay_malformed
+    {
+      { "array" => "string", "object.a" => "string" } => Type::MALFORMED_KEY_COUNT,
+      { "array" => 5 } => Type::MALFORMED_ARGUMENT,
+      { "array" => true } => Type::MALFORMED_ARGUMENT,
+      { "arrays" => "string" } => Type::MALFORMED_KEY_PREFIX,
+      { "array.x" => "string" } => Type::MALFORMED_KEY_PREFIX,
+      { "Array" => "string" } => Type::MALFORMED_KEY_PREFIX,
+    }.each do |raw, reason|
+      type = Type.parse(raw)
+
+      assert_equal "any", type.to_s, raw.inspect
+      assert_equal reason, type.malformed, raw.inspect
+      assert type.valid?("anything"), raw.inspect
+    end
+  end
+
+  # Spec: a union of one entry is that entry. The parser already collapses it; these pin it.
+  def test_union_of_one_entry_is_that_entry
+    assert_equal Type.parse("string"), Type.parse(["string"])
+    assert_equal "email", Type.parse(["string.email"]).format(:compact)
+    assert_equal "string.email", fmt(["string.email"])
+    assert Type.parse(["T"]).param?
+    assert_equal Type.parse({ "array" => "string" }), Type.parse([{ "array" => "string" }])
+    assert_equal Type.parse({ "object.list" => "object.user" }), Type.parse([{ "object.list" => "object.user" }])
+    # The legacy array shorthand is not a one-entry union: [["x"]] is still an array of x.
+    assert_kind_of WebFunction::Type::ArrayOf, Type.parse([["string"]])
+    assert_kind_of WebFunction::Type::Union, Type.parse(["string", "null"])
+  end
+
+  def test_package_with_array_applications_loads
+    package = WebFunction::Package.from_hash(
+      {
+        "base_url" => "https://api.example.com/",
+        "endpoints" => [{ "name" => "get-comments", "returns" => { "array" => "object.comment" }, "arguments" => [] }],
+        "objects" => [
+          {
+            "name" => "comment",
+            "attributes" => [
+              { "name" => "id", "type" => "string.uuid" },
+              { "name" => "message", "type" => "string" },
+              { "name" => "replies", "type" => { "array" => "object.comment" } },
+            ],
+          },
+        ],
+      },
+    )
+
+    assert_equal "array<object.comment>", package.endpoint("get-comments").returns.to_s
+    assert_equal "array<object.comment>", package.object("comment", context: :attributes).attribute("replies").type.to_s
+  end
 end

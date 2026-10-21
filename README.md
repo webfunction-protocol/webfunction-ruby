@@ -26,6 +26,7 @@ client.find_user(id: "123")
 - [Inspecting a package](#inspecting-a-package)
 - [Types](#types)
 - [Object schemas](#object-schemas)
+- [Generics](#generics)
 - [Error handling](#error-handling)
 - [Pipelining](#pipelining)
 - [Custom HTTP client](#custom-http-client)
@@ -377,6 +378,16 @@ WebFunction::Type.parse("array").to_s            # => "array<any>"
 WebFunction::Type.parse(nil).to_s               # => "any"
 ```
 
+An array can also be written as a one-key hash, `{ "array" => <type> }` (in the
+package's JSON, `{ "array": "string" }`). It is the same type as the nested
+array form, and the two compare equal. A union of one entry is just that entry,
+so `["string"]` is the same type as `"string"`:
+
+```ruby
+WebFunction::Type.parse({ "array" => "string" }).to_s # => "array<string>"
+WebFunction::Type.parse(["string"]).to_s              # => "string"
+```
+
 When a type refers to a named object definition (see below), `objects` lists the
 names it references:
 
@@ -418,6 +429,64 @@ user.attribute("email").type.to_s # => "string.email"
 
 If the object is not defined, or defines no members for the requested context,
 `object` returns `nil`.
+
+## Generics
+
+A package can declare a generic object: an object definition whose members use
+the type parameter `T`. A type applies it to a type argument with a one-key
+hash, `{ "object.<name>" => <type> }` (in the package's JSON,
+`{ "object.list": "object.user" }`):
+
+```ruby
+type = WebFunction::Type.parse({ "object.list" => "object.user" })
+
+type.to_s       # => "object.list<object.user>"
+type.base_type  # => "object"
+type.refinement # => "list"
+type.arg.to_s   # => "object.user"
+type.objects    # => ["list", "user"]
+```
+
+The argument can be any type, including a union, an array, or another
+application:
+
+```ruby
+WebFunction::Type.parse({ "object.list" => ["object.user", "null"] }).to_s
+# => "object.list<object.user | null>"
+
+WebFunction::Type.parse({ "object.page" => { "object.page" => "object.user" } }).to_s
+# => "object.page<object.page<object.user>>"
+
+WebFunction::Type.parse({ "object.page" => { "array" => "object.user" } }).to_s
+# => "object.page<array<object.user>>"
+```
+
+Inside a generic object's own definition, `T` stands for the type argument. The
+gem doesn't substitute it for you: an unresolved `T` reads as `any`, and
+`param?` tells it apart from a literal `any`. The `arg` of an application hands
+you the argument, so tooling can do the substitution:
+
+```ruby
+list = package.object("list", context: :attributes)
+items = list.attribute("items").type # declared as [["T"]]
+
+items.to_s      # => "array<any>"
+items.of.param? # => true
+```
+
+The gem never fails on generics. An application that is not exactly one key,
+`object.<name>` or `array`, holding a valid type resolves to `any`, and the
+`malformed` reason on that `any` says why:
+
+```ruby
+WebFunction::Type.parse({ "string" => "object.user" }).malformed # => "key-prefix"
+WebFunction::Type.parse({ "array" => 5 }).malformed              # => "argument"
+WebFunction::Type.parse({}).malformed                            # => "key-count"
+```
+
+The rules for where `T` and applications may appear are in the
+[generics spec](https://webfunction.org/generics); the gem reads them but leaves
+enforcing them to validation tooling.
 
 ## Error handling
 
