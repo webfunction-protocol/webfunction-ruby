@@ -5,17 +5,19 @@ module WebFunction
     class Base
       attr_reader :base_type, :refinement
 
-      def initialize(base_type:, refinement: nil)
+      # The type argument when this is a generic object applied to a type: <tt>{ "object.list" => "object.user" }</tt>
+      # is +object.list+ with the argument +object.user+. +nil+ for any other type.
+      attr_reader :arg
+
+      def initialize(base_type:, refinement: nil, arg: nil)
         @base_type = base_type
         @refinement = refinement
+        @arg = arg
       end
 
       def inspect
-        if @refinement
-          "#<#{@base_type} #{@refinement}>"
-        else
-          "#<#{@base_type}>"
-        end
+        text = @refinement ? "#<#{@base_type} #{@refinement}" : "#<#{@base_type}"
+        @arg ? "#{text} of #{@arg.inspect}>" : "#{text}>"
       end
 
       def format(format = :default)
@@ -25,11 +27,8 @@ module WebFunction
         when :base
           @base_type
         when :default
-          if @refinement
-            "#{@base_type}.#{@refinement}"
-          else
-            @base_type
-          end
+          text = @refinement ? "#{@base_type}.#{@refinement}" : @base_type
+          @arg ? "#{text}<#{@arg.format(format)}>" : text
         else
           raise ArgumentError, "unknown format: #{format.inspect}"
         end
@@ -40,20 +39,18 @@ module WebFunction
       end
 
       def ==(other)
-        other.is_a?(Base) && other.base_type == @base_type && other.refinement == @refinement
+        other.is_a?(Base) && other.base_type == @base_type && other.refinement == @refinement && other.arg == @arg
       end
       alias eql? ==
 
       def hash
-        [Base, @base_type, @refinement].hash
+        [Base, @base_type, @refinement, @arg].hash
       end
 
       def objects
-        if @base_type == "object" && @refinement
-          [@refinement]
-        else
-          []
-        end
+        own = @base_type == "object" && @refinement ? [@refinement] : []
+
+        (own + (@arg ? @arg.objects : [])).uniq
       end
 
       def without_refinements

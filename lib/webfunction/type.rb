@@ -41,7 +41,17 @@ module WebFunction
       end,
     }.freeze
 
+    # Reasons recorded in {Any#malformed} for an invalid generic application. Such a type resolves to +any+ (so a
+    # package using generics, even incorrectly, still loads) and keeps the reason so validation tooling can report it.
+    MALFORMED_KEY_COUNT = "key-count" # the application hash did not have exactly one key
+    MALFORMED_KEY_PREFIX = "key-prefix" # the key was neither "object.<name>" nor "array"
+    MALFORMED_ARGUMENT = "argument" # the value was not a valid type
+
     def self.parse(raw)
+      if raw.is_a?(Hash)
+        return Type.application(raw)
+      end
+
       types = [*raw].map { |type| Type.detect(type) }.compact
 
       if types.empty?
@@ -55,6 +65,8 @@ module WebFunction
       case raw
       when String
         Type.base(raw)
+      when Hash
+        Type.application(raw)
       when Array
         types = raw.map { |type| Type.detect(type) }.compact
 
@@ -68,7 +80,40 @@ module WebFunction
       end
     end
 
+    # Parses a type application: a generic object applied to a type, <tt>{ "object.<name>" => <type> }</tt>, or an array of
+    # a type, <tt>{ "array" => <type> }</tt> (the same as <tt>[[<type>]]</tt>). Anything that is not exactly one of
+    # those shapes resolves to +any+ carrying the reason, rather than failing.
+    def self.application(raw)
+      unless raw.size == 1
+        return Type.any(malformed: MALFORMED_KEY_COUNT)
+      end
+
+      key, value = raw.first
+
+      if key == "array"
+        if value.is_a?(Numeric) || value == true || value == false
+          return Type.any(malformed: MALFORMED_ARGUMENT)
+        end
+
+        return Type.array(Type.parse(value))
+      end
+
+      unless key.is_a?(String) && key.start_with?("object.") && key != "object."
+        return Type.any(malformed: MALFORMED_KEY_PREFIX)
+      end
+
+      if value.is_a?(Numeric) || value == true || value == false
+        return Type.any(malformed: MALFORMED_ARGUMENT)
+      end
+
+      Type.object(key.delete_prefix("object."), Type.parse(value))
+    end
+
     def self.base(type)
+      if type == "T"
+        return Type.any(param: true)
+      end
+
       base_type, refinement = type.split(".", 2)
 
       case base_type
@@ -107,8 +152,8 @@ module WebFunction
       Base.new(base_type: "number", refinement: refinement)
     end
 
-    def self.object(refinement = nil)
-      Base.new(base_type: "object", refinement: refinement)
+    def self.object(refinement = nil, arg = nil)
+      Base.new(base_type: "object", refinement: refinement, arg: arg)
     end
 
     def self.array(of = any)
@@ -133,8 +178,10 @@ module WebFunction
       end
     end
 
-    def self.any
-      Any.new
+    # The +any+ type. +param+ marks the generic type parameter +T+ (+any+ to every consumer, but distinguishable for
+    # tooling that expands generics); +malformed+ is a MALFORMED_* reason for an invalid generic application.
+    def self.any(param: false, malformed: nil)
+      Any.new(param: param, malformed: malformed)
     end
   end
 end
